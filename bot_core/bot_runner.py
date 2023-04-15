@@ -1,4 +1,5 @@
 # Configure logging
+import json
 import logging
 import os
 import re
@@ -32,22 +33,46 @@ async def handle_message(message: types.Message):
     if match:
         book_name = match.group('book_name')
         chapter = match.group('chapter')
-        await message.reply(f"Book Name: {book_name}, Chapter: {chapter}")
     else:
-        await message.reply("No match found.")
+        return await message.reply('Sorry, I don\'t understand you. Please, try again.')
 
-    # prompt = f"User: {message.text}\nChatGPT:"
-    # response = openai.Completion.create(
-    #     engine="davinci",
-    #     prompt=prompt,
-    #     max_tokens=50,
-    #     n=1,
-    #     stop=None,
-    #     temperature=0.7,
-    # )
+    prompt = f'''AAct like a reading club host. You need to create a quiz for your participants.
+The quiz should be based on the {chapter} chapter of the book “{book_name}”.
+The quiz should consist of 1 question with hard difficulty with 4 possible answers.
+Format output as json "question : string, options: [strings], answer:number"
+Answer only JSON'''
 
-    # Send the response back to the user
+    print(prompt)
+    try:
+        await call_gpt(message, prompt)
+    except Exception:
+        await handle_message(message)
+    # await message.reply(response.choices[0]['message']['content'])
 
+async def call_gpt(message, prompt):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a chatbot"},
+            {"role": "user", "content": prompt},
+        ]
+    )
+    print(response.choices[0]['message']['content'])
+    data = json.loads(response.choices[0]['message']['content'])
+    await message.answer_poll(question=data['question'],
+                              options=data['options'],
+                              type='quiz',
+                              correct_option_id=data['answer'] - 1,
+                              is_anonymous=False)
+
+
+@dp.message_handler(regexp='fox.*send.*')
+async def handle_message(message: types.Message):
+    await message.answer_poll(question='Your answer?',
+                              options=['A)', 'B)', 'C'],
+                              type='quiz',
+                              correct_option_id=0,
+                              is_anonymous=False)
 
 
 def start():
